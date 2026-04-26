@@ -3,74 +3,88 @@
 #include <vector>
 #include <random>
 
-// --- AYARLAR ---
-const COLORREF TARGET_COLOR = RGB(255, 0, 255); // Mor (Valorant Düşman Vurgusu)
-const int SCAN_ZONE = 80;   // Tarama alanı (Ekran ortasındaki 80x80 alan)
-const int SMOOTHING = 5;    // Yumuşatma (Ne kadar yüksekse o kadar insansı görünür)
+// --- AYARLAR (GİZLİLİK İÇİN DEĞİŞTİREBİLİRSİN) ---
+const int AREA = 100;       // Tarama alanı (100x100)
+const int SMOOTHING = 6;    // Yumuşatma (Artırırsan daha insansı olur)
+const int TARGET_V_KEY = 'V'; 
 
-// Rastgele gecikme üreteci (Vanguard tespiti için kritik)
-int GetRandomDelay(int min, int max) {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(min, max);
-    return dis(gen);
-}
-
-void MoveMouse(int x, int y) {
+// Fare hareketini sisteme "doğal" olarak ileten fonksiyon
+void StealthMove(int x, int y) {
     INPUT input = { 0 };
     input.type = INPUT_MOUSE;
-    input.mi.dwFlags = MOUSEEVENTF_MOVE;
     input.mi.dx = x / SMOOTHING;
     input.mi.dy = y / SMOOTHING;
-    input.mi.dwExtraInfo = 0; // Yazılımsal bayrağı gizle
+    input.mi.dwFlags = MOUSEEVENTF_MOVE;
+    input.mi.dwExtraInfo = 0; // Injected bayrağını temizle
+    input.mi.time = 0;
     SendInput(1, &input, sizeof(INPUT));
 }
 
 int main() {
-    HDC hdc = GetDC(NULL); 
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    // Performans için ekran bilgilerini bir kez al
+    int sw = GetSystemMetrics(SM_CXSCREEN);
+    int sh = GetSystemMetrics(SM_CYSCREEN);
+    
+    HDC hdcScreen = GetDC(NULL);
+    HDC hdcMem = CreateCompatibleDC(hdcScreen);
+    HBITMAP hbmMem = CreateCompatibleBitmap(hdcScreen, AREA, AREA);
+    SelectObject(hdcMem, hbmMem);
 
-    // Uygulama ismini gizle
-    SetConsoleTitleA("Windows_Input_Service");
+    // Bellek taraması için Bitmap yapılandırması
+    BITMAPINFOHEADER bi = { sizeof(BITMAPINFOHEADER), AREA, -AREA, 1, 32, BI_RGB };
+    std::vector<unsigned char> pixels(AREA * AREA * 4);
 
-    std::cout << "========================================" << std::endl;
-    std::cout << "   YAHYA PRIVATE GHOST AIM - v15.5      " << std::endl;
-    std::cout << "========================================" << std::endl;
-    std::cout << "[*] Mod: Mor Renk Takibi" << std::endl;
-    std::cout << "[*] Aktivasyon Tusu: [ V ]" << std::endl;
-    std::cout << "[+] Sistem su an gizli modda calisiyor." << std::endl;
+    // Konsol Gizleme ve Başlık
+    SetConsoleTitleA("System_Host_Service"); 
+    std::cout << "--- YAHYA PRIVATE STEALTH v18.2 ---" << std::endl;
+    std::cout << "[+] Mod: RAM-Based Memory Scanning" << std::endl;
+    std::cout << "[+] Kontrol Tusu: [ V ]" << std::endl;
 
     while (true) {
-        // 'V' tuşuna basılı olup olmadığını kontrol et
-        if (GetAsyncKeyState('V') & 0x8000) {
+        // V tuşuna basıldığında aktifleş
+        if (GetAsyncKeyState(TARGET_V_KEY) & 0x8000) {
             
-            // Ekranın ortasını tara (Performans için 2'şer piksel atla)
-            for (int y = -SCAN_ZONE; y < SCAN_ZONE; y += 2) {
-                for (int x = -SCAN_ZONE; x < SCAN_ZONE; x += 2) {
-                    COLORREF color = GetPixel(hdc, (screenWidth / 2) + x, (screenHeight / 2) + y);
+            // 1. Ekranın ortasını anlık olarak belleğe (RAM) kopyala
+            BitBlt(hdcMem, 0, 0, AREA, AREA, hdcScreen, (sw / 2) - (AREA / 2), (sh / 2) - (AREA / 2), SRCCOPY);
+            
+            // 2. Bellekteki verileri diziye aktar
+            GetDIBits(hdcMem, hbmMem, 0, AREA, &pixels[0], (BITMAPINFO*)&bi, DIB_RGB_COLORS);
+
+            // 3. Bellek üzerinde mor renk araması yap
+            for (int i = 0; i < pixels.size(); i += 4) {
+                unsigned char b = pixels[i];
+                unsigned char g = pixels[i + 1];
+                unsigned char r = pixels[i + 2];
+
+                // Mor Renk Filtresi (Valorant Vurgusu)
+                if (r > 180 && b > 180 && g < 100) {
+                    int pixelIdx = i / 4;
+                    int x = (pixelIdx % AREA) - (AREA / 2);
+                    int y = (pixelIdx / AREA) - (AREA / 2);
                     
-                    // Mor renk kontrolü (Renk payı eklendi)
-                    if (GetRValue(color) > 180 && GetBValue(color) > 180 && GetGValue(color) < 100) {
-                        MoveMouse(x, y); 
-                        
-                        // Her hareketten sonra çok kısa rastgele bekleme
-                        Sleep(GetRandomDelay(1, 3)); 
-                        goto end_loop; 
-                    }
+                    StealthMove(x, y);
+                    
+                    // Vanguard'ın ritim analizini bozmak için mikro bekleme
+                    std::random_device rd;
+                    std::mt19937 gen(rd());
+                    std::uniform_int_distribution<> d(1, 3);
+                    Sleep(d(gen));
+                    
+                    break; // Hedef bulundu, bir sonraki kareye geç
                 }
             }
         }
-        
-        end_loop:
-        // CPU kullanımını düşürmek ve sistemi stabil tutmak için
+
+        // CPU yorulmasın ve stabilite sağlansın
         Sleep(1); 
 
-        // PANIK TUSU: Klavyeden 'END' tuşuna basarsan program anında kapanır
+        // Acil kapatma (END tuşu)
         if (GetAsyncKeyState(VK_END)) break;
     }
 
-    ReleaseDC(NULL, hdc);
+    // Bellek temizliği
+    DeleteObject(hbmMem);
+    DeleteDC(hdcMem);
+    ReleaseDC(NULL, hdcScreen);
     return 0;
 }
-
