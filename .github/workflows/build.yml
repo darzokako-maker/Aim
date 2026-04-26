@@ -1,0 +1,24 @@
+name: Build-V-Key-Aimbot
+on: [push]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Code Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Developer Environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Compile Stealth EXE
+        # Gdi32.lib ekran piksellerini okumak için şarttır
+        run: |
+          cl.exe /EHsc /O2 /MT /Fe:Yahya_V_Ghost.exe main.cpp user32.lib gdi32.lib
+
+      - name: Release Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: V_Key_Ghost_Package
+          path: Yahya_V_Ghost.exe
+          
