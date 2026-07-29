@@ -2,6 +2,7 @@
 #include <iostream>
 #include <vector>
 #include <random>
+#include <cmath>
 
 // --- SYSCALL DEĞİŞKENLERİ VE FONKSİYON BİLDİRİMİ ---
 extern "C" {
@@ -12,7 +13,6 @@ extern "C" {
 
 // --- AYARLAR ---
 const int SCAN_AREA = 80;    
-const int SMOOTHING = 8;     
 const int ACTIVATION_KEY = 'V'; 
 
 // win32u.dll içerisinden NtUserSendInput'a ait SSN ve Syscall adresini çözen fonksiyon
@@ -42,28 +42,68 @@ bool InitSyscall() {
     return (g_ssn != 0 && g_syscall_gadget != 0);
 }
 
-// Standart SendInput yerine Indirect Syscall kullanan hareket fonksiyonu
-void StealthMove(int x, int y) {
+// Gauss (Normal) dağılım ile insansı milisaniye gecikmesi üreten yardımcı fonksiyon
+int GetGaussianDelay(double mean, double stddev) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> jitter(-1, 1);
+    std::normal_distribution<double> dist(mean, stddev);
+    int delay = static_cast<int>(std::round(dist(gen)));
+    return delay < 1 ? 1 : delay;
+}
 
-    INPUT input = { 0 };
-    input.type = INPUT_MOUSE;
-    input.mi.dx = (x / SMOOTHING) + jitter(gen);
-    input.mi.dy = (y / SMOOTHING) + jitter(gen);
-    input.mi.dwFlags = MOUSEEVENTF_MOVE;
-    input.mi.dwExtraInfo = 0;
-    input.mi.time = 0;
+// İnsansı, eğrisel (Bezier) ve değişken hızlı fare hareketi (Indirect Syscall destekli)
+void StealthMove(int targetX, int targetY) {
+    if (targetX == 0 && targetY == 0) return;
+
+    double distance = std::sqrt(targetX * targetX + targetY * targetY);
     
-    // Standart SendInput yerine Indirect Syscall çağrısı yapılır
-    ExecuteIndirectSyscall(1, &input, sizeof(INPUT));
+    int steps = static_cast<int>(distance / 3.0);
+    if (steps < 5) steps = 5;       
+    if (steps > 50) steps = 50;     
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<double> curveOffset(-0.2, 0.2);
+    
+    double ctrlX = targetX * 0.5 + (targetY * curveOffset(gen));
+    double ctrlY = targetY * 0.5 - (targetX * curveOffset(gen));
+
+    double lastActualX = 0;
+    double lastActualY = 0;
+
+    for (int i = 1; i <= steps; ++i) {
+        double t = static_cast<double>(i) / steps;
+        double easeT = 1.0 - std::pow(1.0 - t, 3.0);
+
+        double currentX = std::pow(1.0 - easeT, 2.0) * 0 + 2.0 * (1.0 - easeT) * easeT * ctrlX + std::pow(easeT, 2.0) * targetX;
+        double currentY = std::pow(1.0 - easeT, 2.0) * 0 + 2.0 * (1.0 - easeT) * easeT * ctrlY + std::pow(easeT, 2.0) * targetY;
+
+        int moveX = static_cast<int>(std::round(currentX - lastActualX));
+        int moveY = static_cast<int>(std::round(currentY - lastActualY));
+
+        if (moveX != 0 || moveY != 0) {
+            INPUT input = { 0 };
+            input.type = INPUT_MOUSE;
+            input.mi.dx = moveX;
+            input.mi.dy = moveY;
+            input.mi.dwFlags = MOUSEEVENTF_MOVE;
+            input.mi.dwExtraInfo = 0;
+            input.mi.time = 0;
+
+            ExecuteIndirectSyscall(1, &input, sizeof(INPUT));
+
+            lastActualX += moveX;
+            lastActualY += moveY;
+        }
+
+        int stepDelay = GetGaussianDelay(2.0, 0.5);
+        Sleep(stepDelay);
+    }
 }
 
 int main() {
     SetConsoleTitleA("Win_Update_Service_X64");
 
-    // Syscall tablosunu ve gadget adreslerini hazırlar
     if (!InitSyscall()) {
         std::cout << "[-] Syscall kurulumu basarisiz oldu!" << std::endl;
         return 1;
@@ -98,19 +138,12 @@ int main() {
                 unsigned char g = pixels[i + 1];
                 unsigned char r = pixels[i + 2];
 
-                // Mor Renk Filtresi
                 if (r > 180 && b > 180 && g < 100) {
                     int pixelIdx = static_cast<int>(i / 4);
                     int x = (pixelIdx % SCAN_AREA) - (SCAN_AREA / 2);
                     int y = (pixelIdx / SCAN_AREA) - (SCAN_AREA / 2);
                     
                     StealthMove(x, y);
-                    
-                    std::random_device rd;
-                    std::mt19937 gen(rd());
-                    std::uniform_int_distribution<> delay(1, 3);
-                    Sleep(delay(gen));
-                    
                     break; 
                 }
             }
