@@ -5,6 +5,11 @@
 #include <cmath>
 #include <fstream>
 
+// --- OTOMATİK KÜTÜPHANE BAĞLANTILARI ---
+#pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "user32.lib")
+#pragma comment(lib, "gdi32.lib")
+
 // --- SYSCALL DEĞİŞKENLERİ VE ASM BİLDİRİMİ ---
 extern "C" {
     DWORD g_ssn = 0;
@@ -15,12 +20,9 @@ extern "C" {
 // --- AYARLAR ---
 const int SCAN_AREA = 80;            // Tarama alanı (Piksel cinsinden FOV karesi)
 const int ACTIVATION_KEY = 'V';      // Tetikleme tuşu
+const double GAME_SENSITIVITY = 0.85; // Oyun içi hassasiyet çarpanı
 
-// OYUN İÇİ HASSASİYET ÇARPINI (Sensitivity Multiplier)
-// Oyun içi fare hassasiyetinize göre burayı ayarlayabilirsiniz. (Örn: Valorant/CS2 içi 0.4 - 1.2 arası)
-const double GAME_SENSITIVITY = 0.85; 
-
-// Uygulamanın Yönetici (Admin) haklarıyla çalışıp çalışmadığını kontrol eder
+// Yönetici (Admin) hakları kontrolü
 bool IsRunAsAdmin() {
     BOOL fRet = FALSE;
     HANDLE hToken = NULL;
@@ -46,7 +48,7 @@ bool InitSyscallSafe() {
     BYTE* pFuncMem = (BYTE*)GetProcAddress(hWin32u, "NtUserSendInput");
     if (!pFuncMem) return false;
 
-    // syscall; ret (0x0F 0x05 0xC3) gadget bul
+    // syscall; ret (0x0F 0x05 0xC3) gadget arama
     for (int i = 0; i < 300; i++) {
         if (pFuncMem[i] == 0x0F && pFuncMem[i + 1] == 0x05 && pFuncMem[i + 2] == 0xC3) {
             g_syscall_gadget = (ULONG_PTR)&pFuncMem[i];
@@ -127,7 +129,7 @@ bool InitSyscallSafe() {
     return (g_ssn != 0 && g_syscall_gadget != 0);
 }
 
-// Gaussian gecikme fonksiyonu
+// Gaussian gecikme
 int GetGaussianDelay(double mean, double stddev) {
     thread_local std::mt19937 gen(std::random_device{}());
     std::normal_distribution<double> dist(mean, stddev);
@@ -135,11 +137,10 @@ int GetGaussianDelay(double mean, double stddev) {
     return delay < 1 ? 1 : delay;
 }
 
-// Raw Input uyumlu 3D Oyun Kamera Hareket Fonksiyonu
+// Raw Input uyumlu fare hareketi
 void StealthMoveRaw(int targetX, int targetY) {
     if (targetX == 0 && targetY == 0) return;
 
-    // Pikselleri oyun içi donanımsal Raw Input açısına dönüştür
     double rawTargetX = targetX * GAME_SENSITIVITY;
     double rawTargetY = targetY * GAME_SENSITIVITY;
 
@@ -160,7 +161,7 @@ void StealthMoveRaw(int targetX, int targetY) {
 
     for (int i = 1; i <= steps; ++i) {
         double t = static_cast<double>(i) / steps;
-        double easeT = 1.0 - std::pow(1.0 - t, 3.0); // Smooth easing
+        double easeT = 1.0 - std::pow(1.0 - t, 3.0);
 
         double currentX = std::pow(1.0 - easeT, 2.0) * 0 + 2.0 * (1.0 - easeT) * easeT * ctrlX + std::pow(easeT, 2.0) * rawTargetX;
         double currentY = std::pow(1.0 - easeT, 2.0) * 0 + 2.0 * (1.0 - easeT) * easeT * ctrlY + std::pow(easeT, 2.0) * rawTargetY;
@@ -173,13 +174,10 @@ void StealthMoveRaw(int targetX, int targetY) {
             input.type = INPUT_MOUSE;
             input.mi.dx = moveX;
             input.mi.dy = moveY;
-            
-            // Raw Input / Relative Kamera hareketi bayrağı
             input.mi.dwFlags = MOUSEEVENTF_MOVE; 
             input.mi.dwExtraInfo = 0;
             input.mi.time = 0;
 
-            // Direct Indirect Syscall
             ExecuteIndirectSyscall(1, &input, sizeof(INPUT));
 
             lastActualX += moveX;
@@ -194,15 +192,12 @@ void StealthMoveRaw(int targetX, int targetY) {
 int main() {
     SetConsoleTitleA("Win_Update_Service_X64");
 
-    // 1. Yönetici Hakları Kontrolü
     if (!IsRunAsAdmin()) {
         std::cout << "[!] HATA: Uygulama YONETICI olarak calistirilmalidir!" << std::endl;
-        std::cout << "[!] Lutfen exe'ye sag tiklayip 'Yonetici Olarak Calistir' deyin." << std::endl;
         system("pause");
         return 1;
     }
 
-    // 2. Indirect Syscall Kurulumu
     if (!InitSyscallSafe()) {
         std::cout << "[-] Syscall kurulumu basarisiz oldu!" << std::endl;
         return 1;
@@ -223,7 +218,7 @@ int main() {
     BITMAPINFOHEADER bi = { 0 };
     bi.biSize = sizeof(BITMAPINFOHEADER);
     bi.biWidth = SCAN_AREA;
-    bi.biHeight = -SCAN_AREA; // Top-down DIB
+    bi.biHeight = -SCAN_AREA;
     bi.biPlanes = 1;
     bi.biBitCount = 32;
     bi.biCompression = BI_RGB;
@@ -236,20 +231,16 @@ int main() {
     while (true) {
         if (GetKeyState(ACTIVATION_KEY) & 0x8000) {
 
-            // Ekranın tam ortasını (Crosshair etrafı) bellek tamponuna kopyala
             BitBlt(hdcMem, 0, 0, SCAN_AREA, SCAN_AREA, hdcScreen,
                 (sw / 2) - (SCAN_AREA / 2), (sh / 2) - (SCAN_AREA / 2), SRCCOPY);
 
             GetDIBits(hdcMem, hbmMem, 0, SCAN_AREA, &pixels[0], (BITMAPINFO*)&bi, DIB_RGB_COLORS);
-
-            bool targetFound = false;
 
             for (size_t i = 0; i < pixels.size(); i += 4) {
                 unsigned char b = pixels[i];
                 unsigned char g = pixels[i + 1];
                 unsigned char r = pixels[i + 2];
 
-                // Mor Renk Tespiti (R > 180, B > 180, G < 100)
                 if (r > 180 && b > 180 && g < 100) {
                     int pixelIdx = static_cast<int>(i / 4);
                     int x = (pixelIdx % SCAN_AREA) - (SCAN_AREA / 2);
@@ -258,14 +249,8 @@ int main() {
                     std::cout << "[!] Renk Bulundu! Move Delta -> X: " << x << " Y: " << y << std::endl;
                     
                     StealthMoveRaw(x, y);
-                    targetFound = true;
                     break;
                 }
-            }
-
-            if (!targetFound) {
-                // Tuşa basılıyor ama mor renk karesinin içinde yoksa log basar
-                // Ekranın okunup okunmadığını buradan doğrulayabilirsiniz.
             }
         }
 
@@ -273,7 +258,6 @@ int main() {
         if (GetKeyState(VK_END) & 0x8000) break;
     }
 
-    // GDI Temizlik
     SelectObject(hdcMem, hOldBitmap);
     DeleteObject(hbmMem);
     DeleteDC(hdcMem);
