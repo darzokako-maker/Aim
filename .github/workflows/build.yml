@@ -1,22 +1,35 @@
-name: Build-Yahya-Private-Stealth
-on: [push]
+name: Build C++ and MASM Project
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup Compiler
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
-      - name: Compile Stealth Binary
-        # /Ox: Tam hız, /MT: Bağımsız dosya yapısı
+      - name: Compile Assembly and C++ Source Files
         run: |
-          cl.exe /EHsc /Ox /MT /D_NDEBUG /Fe:Win_System_Helper.exe main.cpp user32.lib gdi32.lib
+          # 1. Adım: MASM (ml64) ile assembly dosyasını x64 obj dosyasına derle
+          ml64.exe /c /Cx syscall_stub.asm
 
-      - name: Release EXE
+          # 2. Adım: MSVC (cl) ile C++ ana kodunu ve .obj dosyasını bağlayıp exe üret
+          cl.exe /EHsc /Ox /MT /Fe:MyApplication.exe main.cpp syscall_stub.obj user32.lib gdi32.lib
+
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Security_Patch_Files
-          path: Win_System_Helper.exe
+          name: Compiled-Binary
+          path: MyApplication.exe
           
