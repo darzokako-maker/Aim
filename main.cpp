@@ -8,6 +8,8 @@
 extern "C" {
     DWORD g_ssn = 0;
     ULONG_PTR g_syscall_gadget = 0;
+    
+    // Windows API NtUserSendInput imzasına tam uygun tanım
     UINT ExecuteIndirectSyscall(UINT cInputs, LPINPUT pInputs, int cbSize);
 }
 
@@ -32,7 +34,7 @@ bool InitSyscall() {
     }
 
     // 2. win32u.dll içindeki "syscall; ret" (0x0F 0x05) adresini bul
-    for (int i = 0; i < 64; i++) {
+    for (int i = 0; i < 128; i++) {
         if (pFunc[i] == 0x0F && pFunc[i + 1] == 0x05) {
             g_syscall_gadget = (ULONG_PTR)&pFunc[i];
             break;
@@ -44,8 +46,7 @@ bool InitSyscall() {
 
 // Gauss (Normal) dağılım ile insansı milisaniye gecikmesi üreten yardımcı fonksiyon
 int GetGaussianDelay(double mean, double stddev) {
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    thread_local std::mt19937 gen(std::random_device{}());
     std::normal_distribution<double> dist(mean, stddev);
     int delay = static_cast<int>(std::round(dist(gen)));
     return delay < 1 ? 1 : delay;
@@ -61,8 +62,7 @@ void StealthMove(int targetX, int targetY) {
     if (steps < 5) steps = 5;       
     if (steps > 50) steps = 50;     
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    thread_local std::mt19937 gen(std::random_device{}());
     std::uniform_real_distribution<double> curveOffset(-0.2, 0.2);
     
     double ctrlX = targetX * 0.5 + (targetY * curveOffset(gen));
@@ -90,6 +90,7 @@ void StealthMove(int targetX, int targetY) {
             input.mi.dwExtraInfo = 0;
             input.mi.time = 0;
 
+            // Direct NtUserSendInput Syscall Çağrısı
             ExecuteIndirectSyscall(1, &input, sizeof(INPUT));
 
             lastActualX += moveX;
@@ -117,9 +118,16 @@ int main() {
     HDC hdcScreen = GetDC(NULL);
     HDC hdcMem = CreateCompatibleDC(hdcScreen);
     HBITMAP hbmMem = CreateCompatibleBitmap(hdcScreen, SCAN_AREA, SCAN_AREA);
-    SelectObject(hdcMem, hbmMem);
+    HGDIOBJ hOldBitmap = SelectObject(hdcMem, hbmMem);
 
-    BITMAPINFOHEADER bi = { sizeof(BITMAPINFOHEADER), SCAN_AREA, -SCAN_AREA, 1, 32, BI_RGB };
+    BITMAPINFOHEADER bi = { 0 };
+    bi.biSize = sizeof(BITMAPINFOHEADER);
+    bi.biWidth = SCAN_AREA;
+    bi.biHeight = -SCAN_AREA; // Top-down DIB
+    bi.biPlanes = 1;
+    bi.biBitCount = 32;
+    bi.biCompression = BI_RGB;
+
     std::vector<unsigned char> pixels(SCAN_AREA * SCAN_AREA * 4);
 
     std::cout << "[+] System Service Initialized." << std::endl;
@@ -138,6 +146,7 @@ int main() {
                 unsigned char g = pixels[i + 1];
                 unsigned char r = pixels[i + 2];
 
+                // Mor Renk Tespiti (R > 180, B > 180, G < 100)
                 if (r > 180 && b > 180 && g < 100) {
                     int pixelIdx = static_cast<int>(i / 4);
                     int x = (pixelIdx % SCAN_AREA) - (SCAN_AREA / 2);
@@ -153,8 +162,11 @@ int main() {
         if (GetKeyState(VK_END) & 0x8000) break;
     }
 
+    // GDI Kaynaklarını Temizle
+    SelectObject(hdcMem, hOldBitmap);
     DeleteObject(hbmMem);
     DeleteDC(hdcMem);
     ReleaseDC(NULL, hdcScreen);
+
     return 0;
 }
