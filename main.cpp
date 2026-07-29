@@ -3,7 +3,7 @@
 #include <vector>
 #include <random>
 
-// --- AYARLAR (GİZLİLİK İÇİN) ---
+// --- AYARLAR (GİZLİLİK İÇİN) g ---
 const int SCAN_AREA = 80;    // Tarama alanını küçük tutmak GDI izini azaltır
 const int SMOOTHING = 8;     // Daha yüksek değer = Daha insansı hareket
 const int ACTIVATION_KEY = 'V'; 
