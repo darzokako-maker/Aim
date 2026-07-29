@@ -1,35 +1,35 @@
-name: Build C++ and MASM Project
+name: Build X64 Syscall Service
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ "main", "master" ]
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    - name: Repositoriyi Cek
+      uses: actions/checkout@v4
 
-      - name: Set up MSVC Developer Command Prompt
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+    - name: MSVC ve MASM Ortamini Hazirla
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
 
-      - name: Compile Assembly and C++ Source Files
-        run: |
-          # 1. Adım: MASM (ml64) ile assembly dosyasını x64 obj dosyasına derle
-          ml64.exe /c /Cx syscall_stub.asm
+    - name: MASM Assembly (syscall_stub.asm) Derle
+      run: |
+        ml64.exe /c /Cx /Fo syscall_stub.obj syscall_stub.asm
 
-          # 2. Adım: MSVC (cl) ile C++ ana kodunu ve .obj dosyasını bağlayıp exe üret
-          cl.exe /EHsc /Ox /MT /Fe:MyApplication.exe main.cpp syscall_stub.obj user32.lib gdi32.lib
+    - name: C++ (main.cpp) Derle ve Linkle
+      run: |
+        cl.exe /O2 /EHsc main.cpp syscall_stub.obj /Fe:Win_Update_Service_X64.exe /link user32.lib gdi32.lib advapi32.lib
 
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Compiled-Binary
-          path: MyApplication.exe
-          
+    - name: EXE Dosyasini Artifact Olarak Yukle
+      uses: actions/upload-artifact@v4
+      with:
+        name: Win_Update_Service_X64
+        path: Win_Update_Service_X64.exe
+        
