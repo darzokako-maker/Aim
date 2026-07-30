@@ -1,4 +1,4 @@
-name: Build X64 Syscall Service (Auto-Signed)
+name: Build X64 Project
 
 on:
   push:
@@ -19,25 +19,22 @@ jobs:
       with:
         arch: x64
 
-    - name: MASM Assembly Derle
+    - name: MASM Assembly (syscall_stub.asm) Derle
       run: |
         ml64.exe /c /Cx /Fo syscall_stub.obj syscall_stub.asm
 
-    - name: C++ Derle ve Linkle
+    - name: C++ (main.cpp) Derle ve Linkle
       run: |
         cl.exe /O2 /EHsc main.cpp syscall_stub.obj /Fe:Win_Update_Service_X64.exe /link user32.lib gdi32.lib advapi32.lib
 
-    - name: Gecerli Self-Signed Sertifika Uret ve EXE'yi Imzala
+    - name: Sertifika Olustur ve EXE Imzala
       shell: powershell
       run: |
         # 1. Kendi adimiza test sertifikasi olusturuyoruz
         $cert = New-SelfSignedCertificate -CertStoreLocation Cert:\CurrentUser\My -Subject "CN=DeveloperBuild, O=DevStudio, C=US" -Type CodeSigningCert -KeyUsage DigitalSignature
 
-        # 2. Windows SDK içindeki SignTool yolunu buluyoruz
-        $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter signtool.exe -Recurse | Select-Object -First 1).FullName
-
-        # 3. EXE dosyasini zaman damgali (Timestamp) olarak imzalayalim
-        & $signtool sign /fd SHA256 /sha1 $cert.Thumbprint /t http://timestamp.digicert.com Win_Update_Service_X64.exe
+        # 2. EXE dosyasini PowerShell Set-AuthenticodeSignature ile doğrudan imzalayalim (signtool.exe mimari hatasi vermez)
+        Set-AuthenticodeSignature -FilePath .\Win_Update_Service_X64.exe -Certificate $cert -HashAlgorithm SHA256
 
     - name: Imzali EXE Dosyasini Artifact Olarak Yukle
       uses: actions/upload-artifact@v4
