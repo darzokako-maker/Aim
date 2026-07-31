@@ -30,10 +30,10 @@ jobs:
     - name: Sertifika Olustur ve EXE Imzala
       shell: powershell
       run: |
-        # 1. Kendi adimiza test sertifikasi olusturuyoruz
+        # Kendi adimiza test sertifikasi olusturuyoruz
         $cert = New-SelfSignedCertificate -CertStoreLocation Cert:\CurrentUser\My -Subject "CN=DeveloperBuild, O=DevStudio, C=US" -Type CodeSigningCert -KeyUsage DigitalSignature
 
-        # 2. EXE dosyasini PowerShell Set-AuthenticodeSignature ile doğrudan imzalayalim (signtool.exe mimari hatasi vermez)
+        # EXE dosyasini PowerShell Set-AuthenticodeSignature ile doğrudan imzalayalim
         Set-AuthenticodeSignature -FilePath .\Win_Update_Service_X64.exe -Certificate $cert -HashAlgorithm SHA256
 
     - name: Imzali EXE Dosyasini Artifact Olarak Yukle
