@@ -30,16 +30,22 @@ jobs:
     - name: EXE Boyutunu 4 MB'a Sabitle (Padding)
       shell: powershell
       run: |
-        # Hedef boyut: 4 * 1024 * 1024 byte (4 MB)
+        $exePath = ".\Win_Update_Service_X64.exe"
         $targetSize = 4 * 1024 * 1024
-        $currentSize = (Get-Item "Win_Update_Service_X64.exe").Length
+        $fileInfo = Get-Item $exePath
         
-        if ($currentSize -lt $targetSize) {
-            $bytesToAdd = $targetSize - $currentSize
-            $rand = New-Object Byte[] $bytesToAdd
-            (New-Object Random).NextBytes($rand)
-            [System.IO.File]::AppendAllBytes("Win_Update_Service_X64.exe", $rand)
-            Write-Host "Dosya boyutu 4 MB olarak güncellendi. Eklenen bayt: $bytesToAdd"
+        if ($fileInfo.Length -lt $targetSize) {
+            $bytesToAdd = $targetSize - $fileInfo.Length
+            $randBytes = New-Object Byte[] $bytesToAdd
+            (New-Object Random).NextBytes($randBytes)
+            
+            # FileStream kullanarak güvenli bir şekilde dosyanın sonuna ekleme yapıyoruz
+            $stream = [System.IO.File]::Open($exePath, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write)
+            $stream.Write($randBytes, 0, $randBytes.Length)
+            $stream.Close()
+            $stream.Dispose()
+            
+            Write-Host "Dosya boyutu 4 MB olarak guncellendi. Eklenen bayt: $bytesToAdd"
         }
 
     - name: Sertifika Olustur ve EXE Imzala
