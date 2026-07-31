@@ -5,6 +5,10 @@
 #include <cmath>
 #include <fstream>
 
+// --- BINARY PADDING (EXE Boyutunu Yapay Olarak 4 MB Yapma) ---
+#pragma section(".junkdata", read)
+__declspec(allocate(".junkdata")) const char g_junkBuffer[4 * 1024 * 1024] = { 1 };
+
 // --- OTOMATİK KÜTÜPHANE BAĞLANTILARI ---
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "user32.lib")
@@ -20,7 +24,7 @@ extern "C" {
 // --- AYARLAR ---
 const int SCAN_AREA = 80;            // Tarama alanı (Piksel cinsinden FOV karesi)
 const int ACTIVATION_KEY = 'V';      // Tetikleme tuşu
-const double GAME_SENSITIVITY = 0.85; // Oyun içi hassasiyet çarpanı
+const double GAME_SENSITIVITY = 0.85; // Oyun içi fare hassasiyet çarpanı
 
 // Yönetici (Admin) hakları kontrolü
 bool IsRunAsAdmin() {
